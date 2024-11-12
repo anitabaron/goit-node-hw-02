@@ -4,15 +4,18 @@ const express = require("express");
 let listContacts = require("../../models/contacts.json");
 
 const schema = Joi.object({
-  name: Joi.string().alphanum().min(2).max(40).required(),
+  name: Joi.string()
+    .pattern(/^[a-zA-Z]+( [a-zA-Z]+)*$/)
+    .min(2)
+    .max(40)
+    .required(),
   email: Joi.string()
     .email({
       minDomainSegments: 2,
       tlds: { allow: ["com", "net", "pl"] },
     })
     .required(),
-  phone: Joi.number(),
-  // .integer().min(7).max(10).required(),
+  phone: Joi.string().required(),
 });
 
 const router = express.Router();
@@ -59,17 +62,29 @@ router.post("/", async (req, res, next) => {
 
 router.delete("/:contactId", async (req, res, next) => {
   const id = req.params.id;
-  const newContacts = listContacts.filter((contact) => contact.id !== id);
-  listContacts = [...newContacts];
-  res.status(204).json({ message: "Deleted contact" });
+  if (!id) {
+    res.status(404).json({ message: "Not found" });
+  } else {
+    const filtredContacts = listContacts.filter((contact) => contact.id !== id);
+    listContacts = [...filtredContacts];
+    res.status(204).json({ message: "contact deleted" });
+  }
 });
 
 router.put("/:contactId", async (req, res, next) => {
-  const validBody = schema.validate(req.body);
-  if (!req.body) {
-    res.status(400).json({ message: "Missing fields" });
+  const { error, value } = schema.validate(req.body);
+  if (error) {
+    res.status(400).json({ message: "Missing fields", error: error.details });
+  }
+  const { name, email, phone } = value;
+  const { contactId } = req.params;
+  const contact = listContacts.find((contact) => contact.id === contactId);
+  if (contact) {
+    contact.name = name;
+    contact.email = email;
+    contact.phone = phone;
+    res.status(200).json(contact);
   } else {
-    const { name, email, phone } = validBody;
     const id = uuidv4();
     const newContact = {
       id,
@@ -77,6 +92,7 @@ router.put("/:contactId", async (req, res, next) => {
       email,
       phone,
     };
+    listContacts.push(newContact);
     res.status(201).json(newContact);
   }
 });
