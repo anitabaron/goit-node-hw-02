@@ -15,7 +15,7 @@ const schema = Joi.object({
       tlds: { allow: ["com", "net", "pl"] },
     })
     .required(),
-  phone: Joi.string().required(),
+  phone: Joi.number().integer().required(),
 });
 
 const router = express.Router();
@@ -43,9 +43,7 @@ router.get("/:contactId", async (req, res, next) => {
 router.post("/", async (req, res, next) => {
   const { error, value } = schema.validate(req.body);
   if (error) {
-    res
-      .status(404)
-      .json({ message: "Contact not correct", error: error.details });
+    res.status(400).json({ message: "Missing fields", error: error.details });
   } else {
     const { name, email, phone } = value;
     const id = uuidv4();
@@ -61,13 +59,16 @@ router.post("/", async (req, res, next) => {
 });
 
 router.delete("/:contactId", async (req, res, next) => {
-  const id = req.params.id;
+  const id = req.params.contactId;
+  const contactExists = listContacts.some((contact) => contact.id === id);
   if (!id) {
-    res.status(404).json({ message: "Not found" });
+    res.status(404).json({ message: "Id is required to delete contact" });
+  } else if (!contactExists) {
+    res.status(404).json({ message: "Contact not found" });
   } else {
     const filtredContacts = listContacts.filter((contact) => contact.id !== id);
     listContacts = [...filtredContacts];
-    res.status(204).json({ message: "contact deleted" });
+    res.status(200).json({ message: "Contact deleted" });
   }
 });
 
@@ -75,25 +76,22 @@ router.put("/:contactId", async (req, res, next) => {
   const { error, value } = schema.validate(req.body);
   if (error) {
     res.status(400).json({ message: "Missing fields", error: error.details });
+    return;
   }
   const { name, email, phone } = value;
   const { contactId } = req.params;
-  const contact = listContacts.find((contact) => contact.id === contactId);
-  if (contact) {
-    contact.name = name;
-    contact.email = email;
-    contact.phone = phone;
-    res.status(200).json(contact);
-  } else {
-    const id = uuidv4();
-    const newContact = {
-      id,
-      name,
-      email,
-      phone,
-    };
-    listContacts.push(newContact);
-    res.status(201).json(newContact);
+  const existingContact = listContacts.find(
+    (contact) => contact.id === contactId
+  );
+  if (!existingContact) {
+    res.status(404).json({ message: "Contact not found" });
+    return;
+  }
+  if (existingContact) {
+    existingContact.name = name;
+    existingContact.email = email;
+    existingContact.phone = phone;
+    res.status(200).json(existingContact);
   }
 });
 
